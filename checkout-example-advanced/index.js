@@ -47,10 +47,14 @@ app.set("view engine", "handlebars");
 // Get payment methods
 app.post("/api/paymentMethods", async (req, res) => {
   try {
-    const response = await checkout.PaymentsApi.paymentMethods({
+    var request = {
       channel: "Web",
       merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT,
-    });
+    }
+
+    console.log("/api/paymentMethods - request", JSON.stringify(request, 0, 2));
+    const response = await checkout.PaymentsApi.paymentMethods(request);
+    console.log("/api/paymentMethods - response", JSON.stringify(response, 0, 2));
     res.json(response);
   } catch (err) {
     console.error(`Error: ${err.message}, error code: ${err.errorCode}`);
@@ -72,8 +76,16 @@ app.post("/api/payments", async (req, res) => {
     // const isHttps = req.connection.encrypted;
     const protocol = req.socket.encrypted? 'https' : 'http';    
     // ideally the data passed here should be computed based on business logic
-    const response = await checkout.PaymentsApi.payments({
-      amount: { currency, value: 10000 }, // value is 100€ in minor units
+
+    console.log("Amount from req: ", JSON.stringify(req.body, 0, 4));
+    const amountValue = (req.body.amount) ? req.body.amount.value : 1000;
+
+
+    var request = {
+      amount: { 
+        currency, 
+        value: amountValue
+      }, 
       reference: orderRef, // required
       merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT, // required
       channel: "Web", // required
@@ -83,9 +95,9 @@ app.post("/api/payments", async (req, res) => {
       authenticationData: {
         attemptAuthentication: "always",
         // add the following line for Native 3DS2 > see also 3ds2-example folder
-        //threeDSRequestData: {
-        //  nativeThreeDS: "preferred"
-        //}
+        threeDSRequestData: {
+          nativeThreeDS: "preferred"
+        }
       },
       returnUrl: `${protocol}://${localhost}/handleShopperRedirect?orderRef=${orderRef}`, // required for 3ds2 redirect flow
       paymentMethod : req.body.paymentMethod,
@@ -96,18 +108,33 @@ app.post("/api/payments", async (req, res) => {
           ? null
           : req.body.billingAddress,
       deliveryDate: new Date("2017-07-17T13:42:40.428+01:00"),
-      shopperStatement: "Aceitar o pagamento até 15 dias após o vencimento.Não cobrar juros. Não aceitar o pagamento com cheque",
+      shopperStatement: "DanielSc Web Payments",
       // below fields are required for Klarna, line items included
       countryCode: req.body.paymentMethod.type.includes("klarna") ? "DE" : null,
       shopperReference: "12345",
       shopperEmail: "youremail@email.com",
-      shopperLocale: "en_US",
-      lineItems: [
+      shopperLocale: "en_AU",
+      shopperName: {
+        firstName: "Daniel",
+        lastName: "Schofield"
+      },
+      mandate:{
+        frequency: "weekly",
+        endsAt: "2025-12-31",
+        amount: 9000,
+        amountRule: "max",
+        count: 1,
+        remarks: "Your agreement description"
+      }
+      /*lineItems: [
         {quantity: 1, amountIncludingTax: 5000 , description: "Sunglasses"},
         {quantity: 1, amountIncludingTax: 5000 , description: "Headphones"}
-      ],
-    });
+      ],*/
+    }
 
+    console.log("/api/payments - request", JSON.stringify(request, 0, 4));
+    const response = await checkout.PaymentsApi.payments(request);
+    console.log("/api/payments - response", JSON.stringify(response, 0, 4));
     res.json(response);
   } catch (err) {
     console.error(`Error: ${err.message}, error code: ${err.errorCode}`);
@@ -125,8 +152,9 @@ app.post("/api/payments/details", async (req, res) => {
   try {
     // Return the response back to client
     // (for further action handling or presenting result to shopper)
+    console.log("/api/payments/details - request", JSON.stringify(payload, 0, 2));
     const response = await checkout.PaymentsApi.paymentsDetails(payload);
-
+    console.log("/api/payments/details - response", JSON.stringify(response, 0, 2));
     res.json(response);
   } catch (err) {
     console.error(`Error: ${err.message}, error code: ${err.errorCode}`);
@@ -134,6 +162,24 @@ app.post("/api/payments/details", async (req, res) => {
   }
 });
 
+app.post("/api/payments/cardDetails", async (req, res) => {
+    
+  try {
+    console.log("/api/payments/cardDetails - req", req);
+    const payload = {
+      merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT, // required
+      encryptedCardNumber: req.body.encryptedCardNumber //required
+    };
+
+    console.log("/api/payments/cardDetails - request", JSON.stringify(payload, 0, 2));
+    const response = await checkout.PaymentsApi.cardDetails(payload)
+    console.log("/api/payments/cardDetails - response", JSON.stringify(response, 0, 2));
+    res.json(response);
+  } catch (err) {
+    console.error(`Error: ${err.message}, error code: ${err.errorCode}`);
+    res.status(err.statusCode).json(err.message);
+  }
+});
 
 /* ################# end API ENDPOINTS ###################### */
 
@@ -290,8 +336,10 @@ function findCurrency(type) {
     case "boletobancario":
     case "boletobancario_santander":
       return "BRL";
+    case "payto":
+      return "AUD"
     default:
-      return "EUR";
+      return "AUD";
   }
 }
 
