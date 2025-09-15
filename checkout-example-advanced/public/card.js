@@ -8,11 +8,11 @@ async function createAdyenCheckout(paymentMethodsResponse) {
     clientKey,
     environment: "test",
     amount: {
-      value: 10000,
-      currency: 'EUR'
+      value: 0,
+      currency: 'AUD'
     },
     locale: "en_US",
-    countryCode: 'NL',
+    countryCode: 'AU',
     showPayButton: true,
     // override Security Code label
     translations: {
@@ -115,6 +115,9 @@ function handleOnPaymentFailed(resultCode) {
   }
 }
 
+
+const checkoutObj = null;
+
 // Function to start checkout
 async function startCheckout() {
   try {
@@ -129,23 +132,97 @@ async function startCheckout() {
     const card = new Card(checkout, {
       // Optional configuration.
       billingAddressRequired: false, // when true show the billing address input fields and mark them as required.
-      showBrandIcon: true, // when false not showing the brand logo 
+      showBrandIcon: true, // when false not showing the brand logo
       hasHolderName: true, // show holder name
       holderNameRequired: true, // make holder name mandatory
       // configure placeholders
       placeholders: {
-        cardNumber: '1234 5678 9012 3456',
-        expiryDate: 'MM/YY',
-        securityCodeThreeDigits: '123',
-        securityCodeFourDigits: '1234',
-        holderName: 'J. Smith'
+        cardNumber: "1234 5678 9012 3456",
+        expiryDate: "MM/YY",
+        securityCodeThreeDigits: "123",
+        securityCodeFourDigits: "1234",
+        holderName: "J. Smith",
+      },
+      onChange: async (state) => {
+        console.info("onChange", state);
+        handleOnChange(state);
+      },
+      onBinValue: async (binValue) => {
+        console.info("onBinValue", binValue);
+        handleOnBinValue(binValue);
+      },
+      onFieldValid: async (field) => {
+        console.info("onFieldValid", field);
+        handleOnFieldValid(field);
+      },
+      onBinLookup: async (state) => {
+        console.info("onBinLookup", state);
+        handleOnBinLookup(state);
       }
-    }).mount('#component-container');
+    }
+    ).mount('#component-container');
 
   } catch (error) {
     console.error(error);
     alert("Error occurred. Look at console for details");
   }
 }
+
+  async function handleOnChange(state) {
+    console.info("handleOnChange", state);
+    if (state.data.paymentMethod.encryptedCardNumber) {
+      try {
+        console.info("Encrypted card number available - /cardDetails Request", state);
+        const cardNumber = {
+          encryptedCardNumber: state.data.paymentMethod.encryptedCardNumber,
+        };
+
+        const cardDetailsResponse = await fetch("/api/payments/cardDetails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: cardNumber ? JSON.stringify(cardNumber) : "",
+        }).then((response) => response.json());
+
+        console.info("cardDetails - Response", JSON.stringify(cardDetailsResponse, 0, 2));
+
+        //console.info("incrementing state.amount.value. Old Value: ", state.amount.value);
+        //state.amount.value = state.amount.value + 100;
+        //console.info("incrementing state.amount.value. New Value: ", state.amount.value);
+      } catch (error) {
+        console.error(error);
+        alert("Error occurred. Look at console for details");
+      }
+    }
+  }
+
+  async function handleOnBinValue(binValue) {
+    console.info("handleOnBinValue", JSON.stringify(binValue, 0, 2));
+
+    if (binValue.encryptedBin) {
+      try {
+        console.info("Encrypted Bin value available - /cardDetails Request", binValue);
+
+        const cardNumber = {
+          encryptedCardNumber: binValue.encryptedBin,
+        };
+
+        const cardDetailsResponse = await makeCardDetails(cardNumber);
+        cardDetailsResponse.forEach((element) => {});
+        const surchargePerc = getSurchargeForBrand(cardDetailsResponse.brand);
+      } catch (error) {}
+    }
+  }
+
+  async function handleOnFieldValid (field) {
+    console.info("handleOnFieldValid", field);
+    if (field.isValid) {
+    }
+  }
+
+  async function handleOnBinLookup (card) {
+    console.info("handleOnBinLookup", card);
+  }
 
 startCheckout();
