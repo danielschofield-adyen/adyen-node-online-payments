@@ -77,7 +77,7 @@ app.post("/api/payments", async (req, res) => {
     const protocol = req.socket.encrypted? 'https' : 'http';    
     // ideally the data passed here should be computed based on business logic
 
-    console.log("Amount from req: ", JSON.stringify(req.body, 0, 4));
+    console.log("Amount from req: ", JSON.stringify(req.body.amount, 0, 4));
     const amountValue = (req.body.amount) ? req.body.amount.value : 1000;
 
 

@@ -6,7 +6,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const sessionId = urlParams.get('sessionId'); // Unique identifier for the payment session
 const redirectResult = urlParams.get('redirectResult');
 
-
+let dropin;
 
 async function startCheckout() {
   try {
@@ -22,7 +22,7 @@ async function startCheckout() {
       clientKey,
       environment: "test",
       amount: {
-        value: 10000,
+        value: 1000,
         currency: 'AUD'
       },
       locale: "en_AU",
@@ -33,6 +33,9 @@ async function startCheckout() {
         'en-US': {
           'creditCard.securityCode.label': 'CVV/CVC'
         }
+      },
+      onChange: async (state) => {
+        handleOnChange(state);
       },
       onSubmit: async (state, component, actions) => {
         handleOnSubmit(state, component, actions);
@@ -52,12 +55,20 @@ async function startCheckout() {
       }
     };
 
+
+
     // Start the AdyenCheckout and mount the element onto the 'payment' div.
     const adyenCheckout = await AdyenCheckout(configuration);
-    const dropin = new Dropin(adyenCheckout, {
+    dropin = new Dropin(adyenCheckout, {
+      showPayButton: dropinConfig.showPayButton,
       paymentMethodsConfiguration: {
         card: cardConfiguration,
         googlepay: googlepayConfiguration
+      },
+      onReady: () => {
+        var checkoutButton = document.getElementById("submit-btn");
+        checkoutButton.style.display = (dropinConfig.showPayButton) ? "none" : "block";
+        checkoutButton.addEventListener("click",() => dropin.submit());
       }
     }).mount('#dropin-container');
 
@@ -97,7 +108,7 @@ async function handleOnSubmit(state, component, actions){
 }
 
 async function onHandleAdditionalDetails(state, component, actions){
-  console.info("onAdditionalDetails", state, component);
+  console.info("onAdditionalDetails - ", state, component);
   try {
     const { resultCode } = await fetch("/api/payments/details", {
       method: "POST",
@@ -126,24 +137,24 @@ function handleOnError(error, component){
 
 // Function to handle payment completion redirects
 function handleOnPaymentCompleted(resultCode) {
-  console.info("onPaymentCompleted", result, component);
+  console.info("onPaymentCompleted - ", resultCode);
   switch (resultCode) {
     case "Authorised":
-      window.location.href = "/result/success";
+      //window.location.href = "/result/success";
       break;
     case "Pending":
     case "Received":
-      window.location.href = "/result/pending";
+      //window.location.href = "/result/pending";
       break;
     default:
-      window.location.href = "/result/error";
+      //window.location.href = "/result/error";
       break;
   }
 }
 
 // Function to handle payment failure redirects
 function handleOnPaymentFailed(resultCode) {
-  console.info("onPaymentFailed", result, component);
+  console.info("onPaymentFailed - ", resultCode);
   switch (resultCode) {
     case "Cancelled":
     case "Refused":
@@ -159,32 +170,44 @@ function handleOnPaymentFailed(resultCode) {
 
 async function handleOnChange(state){
   console.info("handleOnChange",state);
-  if(state.data.paymentMethod.encryptedCardNumber) {
-    try {
-      console.info("Encrypted card number available - /cardDetails Request",state);
-      const cardNumber = {
-        encryptedCardNumber : state.data.paymentMethod.encryptedCardNumber
-      }
-
-    const cardDetailsResponse = await fetch('/api/payments/cardDetails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: cardNumber ? JSON.stringify(cardNumber) : ""
-    }).then(response => response.json());
-
-    console.info("cardDetails - Response",JSON.stringify(cardDetailsResponse, 0, 2));
-
-    //console.info("incrementing state.amount.value. Old Value: ", state.amount.value);
-    //state.amount.value = state.amount.value + 100;
-    //console.info("incrementing state.amount.value. New Value: ", state.amount.value);
   
-  } catch (error) {
-    console.error(error);
-    alert("Error occurred. Look at console for details");
+  const paymentMethodType = state.data.paymentMethod.type;
+  console.info("Handling on change - Type: ", paymentMethodType)
+  switch(paymentMethodType) {
+    case "googlepay":
+      console.info("Handling GooglePay = Updating amount to $20");
+      state.data.amount.value = 2000;
+      break;
+
+    default:
+    if(state.data.paymentMethod.encryptedCardNumber) {
+      try {
+        console.info("Encrypted card number available - /cardDetails Request",state);
+        const cardNumber = {
+          encryptedCardNumber : state.data.paymentMethod.encryptedCardNumber
+        }
+
+        const cardDetailsResponse = await fetch('/api/payments/cardDetails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: cardNumber ? JSON.stringify(cardNumber) : ""
+        }).then(response => response.json());
+
+        console.info("cardDetails - Response",JSON.stringify(cardDetailsResponse, 0, 2));
+
+        //console.info("incrementing state.amount.value. Old Value: ", state.amount.value);
+        //state.amount.value = state.amount.value + 100;
+        //console.info("incrementing state.amount.value. New Value: ", state.amount.value);
+      
+      } catch (error) {
+        console.error(error);
+        alert("Error occurred. Look at console for details");
+      }
+    }
+    break;
   }
-}
 }
 
 async function handleOnBinValue(binValue){
@@ -260,6 +283,10 @@ const googlepayConfiguration = {
   onChange: async (state) => {
     handleOnChange(state);
   }
+}
+
+const dropinConfig = {
+  showPayButton: true
 }
 
 startCheckout();
